@@ -15,13 +15,13 @@ const log = console.log
 const cli = meow(
   `
   Usage
-    $ rest-query-gen <configFile>
+    $ swagger-to-react-query <configFile>
 
   Options
     --hooks, -hk  Include hooks
 
   Examples
-    $ rest-query-gen config.js --hooks
+    $ swagger-to-react-query config.js --hooks
 `,
   {
     flags: {
@@ -34,6 +34,10 @@ const cli = meow(
 )
 
 const [configFile] = cli.input
+
+if (!configFile) {
+  throw new Error('Config file is required')
+}
 
 const configs = require(join(process.cwd(), configFile))
 
