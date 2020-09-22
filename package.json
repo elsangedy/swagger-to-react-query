@@ -1,6 +1,6 @@
 {
   "name": "swagger-to-react-query",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "license": "MIT",
   "keywords": [
     "react",
@@ -15,10 +15,9 @@
     "email": "elsangedy@gmail.com",
     "url": "https://github.com/elsangedy"
   },
-  "main": "dist/index.js",
-  "module": "dist/index.es.js",
+  "main": "src/index.js",
   "files": [
-    "dist"
+    "src"
   ],
   "bin": {
     "swagger-to-react-query": "src/index.js"
