@@ -1,64 +1,174 @@
+/* eslint-disable */
+/* tslint:disable */
 import ky from 'ky'
 import { useQuery, useMutation } from 'react-query'
 
 let api = ky.create({
-  prefixUrl: 'https://nestjs-example.now.sh'
+  "prefixUrl": "https://nestjs-example.now.sh",
+  "throwHttpErrors": false
 })
 
 export const getApi = () => api
 
-export const setApi = newApi => (api = typeof newApi === 'function' ? newApi(getApi()) : newApi)
+export const setApi = (newApi) => {
+  api = newApi
+}
 
-export const queryUsersControllerFindMany = options => api.get(`users`, options).json()
-export const useQueryUsersControllerFindMany = (config = {}, options = {}) =>
-  useQuery({
-    queryKey: ['users'],
-    queryFn: () => queryUsersControllerFindMany(options),
-    config
+export const extendApi = (options) => {
+  api = getApi().extend(options)
+}
+
+const requestFn = async ({ url, method, pathParams, queryParams, ...rest }) => {
+  const urlPathParams = url.match(/{([^}]+)}/g)
+
+  if (urlPathParams) {
+    url = urlPathParams.reduce((acc, param) => acc.replace(param, pathParams[param.replace(/{|}/g, '')]), url)
+  } else {
+    queryParams = pathParams
+  }
+
+  if (url.charAt(0) === '/') {
+    url = url.replace('/', '')
+  }
+
+  const response = await api(url, {
+    method,
+    ...rest,
+    searchParams: {
+      ...(rest.searchParams || {}),
+      ...queryParams
+    }
   })
-useQueryUsersControllerFindMany.queryKey = 'users'
 
-export const mutationUsersControllerCreate = options => api.post(`users`, options).json()
-export const useMutationUsersControllerCreate = config => useMutation(mutationUsersControllerCreate, config)
+  let data
 
-export const queryUsersControllerFindById = ({ id, ...options }) => api.get(`user/${id}`, options).json()
-export const useQueryUsersControllerFindById = (params, config = {}, options = {}) =>
-  useQuery({
-    queryKey: params && params.id && ['user/${id}', params],
-    queryFn: (_, { id }) => queryUsersControllerFindById({ id, ...options }),
-    config
+  try {
+    const contentType = (response.headers.get('content-type') || '').split('; ')[0]
+
+    const responseType =
+      {
+        'application/json': 'json',
+        'application/pdf': 'blob'
+      }[contentType] || 'text'
+
+    data = await response[responseType]()
+  } catch (e) {
+    data = e.message
+  }
+
+  if (!response.ok) {
+    const error = {
+      data,
+      status: response.status,
+      message: `Failed to fetch: ${response.status} ${response.statusText}`
+    }
+
+    throw error
+  }
+
+  return data
+}
+
+const queryFn = (options = {}) => (url, pathParams = {}, queryParams = {}) => {
+  const controller = new AbortController()
+  const { signal } = controller
+
+  const promise = requestFn({
+    url,
+    method: 'get',
+    pathParams,
+    queryParams,
+    signal,
+    ...options
   })
-useQueryUsersControllerFindById.queryKey = 'user/${id}'
 
-export const mutationUsersControllerUpdate = ({ id, ...options }) => api.put(`user/${id}`, options).json()
-export const useMutationUsersControllerUpdate = config => useMutation(mutationUsersControllerUpdate, config)
+  // cancel the request if React Query calls the 'promise.cancel' method
+  promise.cancel = () => {
+    controller.abort('Query was cancelled by React Query')
+  }
 
-export const mutationUsersControllerDelete = ({ id, ...options }) => api.delete(`user/${id}`, options).json()
-export const useMutationUsersControllerDelete = config => useMutation(mutationUsersControllerDelete, config)
+  return promise
+}
 
-export const queryPostsControllerFindMany = options => api.get(`posts`, options).json()
-export const useQueryPostsControllerFindMany = (config = {}, options = {}) =>
-  useQuery({
-    queryKey: ['posts'],
-    queryFn: () => queryPostsControllerFindMany(options),
-    config
-  })
-useQueryPostsControllerFindMany.queryKey = 'posts'
+const mutationFn = (
+  method,
+  url,
+  pathParams = {},
+  queryParams = {},
+  options = {}
+) => (body = {}) => {
+  if (Array.isArray(body)) {
+    pathParams = { ...pathParams, ...(body[0] || {}) }
+    queryParams = { ...queryParams, ...(body[1] || {}) }
+    options = { ...options, ...(body[3] || {}) }
+    body = body[2]
+  }
 
-export const mutationPostsControllerCreate = options => api.post(`posts`, options).json()
-export const useMutationPostsControllerCreate = config => useMutation(mutationPostsControllerCreate, config)
+  const request = {
+    url,
+    method,
+    pathParams,
+    queryParams,
+    ...options
+  }
 
-export const queryPostsControllerFindById = ({ id, ...options }) => api.get(`post/${id}`, options).json()
-export const useQueryPostsControllerFindById = (params, config = {}, options = {}) =>
-  useQuery({
-    queryKey: params && params.id && ['post/${id}', params],
-    queryFn: (_, { id }) => queryPostsControllerFindById({ id, ...options }),
-    config
-  })
-useQueryPostsControllerFindById.queryKey = 'post/${id}'
+  if (method !== 'delete') {
+    try {
+      request[body.toString() === '[object FormData]' ? 'body' : 'json'] = body
+    } catch(e) {
+    }
+  }
 
-export const mutationPostsControllerUpdate = ({ id, ...options }) => api.put(`post/${id}`, options).json()
-export const useMutationPostsControllerUpdate = config => useMutation(mutationPostsControllerUpdate, config)
+  return requestFn(request)
+}
 
-export const mutationPostsControllerDelete = ({ id, ...options }) => api.delete(`post/${id}`, options).json()
-export const useMutationPostsControllerDelete = config => useMutation(mutationPostsControllerDelete, config)
+export const queryUsersControllerFindMany = (options) => queryFn(options)('/users')
+export const useQueryUsersControllerFindMany = (config, options) => useQuery({
+  queryKey: ['/users'],
+  queryFn: queryFn(options),
+  config
+})
+useQueryUsersControllerFindMany.queryKey = '/users'
+
+export const mutationUsersControllerCreate = (options) => mutationFn('post', '/users', {}, {}, options)
+export const useMutationUsersControllerCreate = (config, options) => useMutation(mutationFn('post', '/users', {}, {}, options), config)
+
+export const queryUsersControllerFindById = (pathParams, options) => queryFn(options)('/user/{id}', pathParams)
+export const useQueryUsersControllerFindById = (pathParams, config, options) => useQuery({
+  queryKey: pathParams && pathParams.id && ['/user/{id}', pathParams],
+  queryFn: queryFn(options),
+  config
+})
+useQueryUsersControllerFindById.queryKey = '/user/{id}'
+
+export const mutationUsersControllerUpdate = (pathParams, options) => mutationFn('put', '/user/{id}', pathParams, {}, options)
+export const useMutationUsersControllerUpdate = (pathParams, config, options) => useMutation(mutationFn('put', '/user/{id}', pathParams, {}, options), config)
+
+export const mutationUsersControllerDelete = (pathParams, options) => mutationFn('delete', '/user/{id}', pathParams, {}, options)
+export const useMutationUsersControllerDelete = (pathParams, config, options) => useMutation(mutationFn('delete', '/user/{id}', pathParams, {}, options), config)
+
+export const queryPostsControllerFindMany = (options) => queryFn(options)('/posts')
+export const useQueryPostsControllerFindMany = (config, options) => useQuery({
+  queryKey: ['/posts'],
+  queryFn: queryFn(options),
+  config
+})
+useQueryPostsControllerFindMany.queryKey = '/posts'
+
+export const mutationPostsControllerCreate = (options) => mutationFn('post', '/posts', {}, {}, options)
+export const useMutationPostsControllerCreate = (config, options) => useMutation(mutationFn('post', '/posts', {}, {}, options), config)
+
+export const queryPostsControllerFindById = (pathParams, options) => queryFn(options)('/post/{id}', pathParams)
+export const useQueryPostsControllerFindById = (pathParams, config, options) => useQuery({
+  queryKey: pathParams && pathParams.id && ['/post/{id}', pathParams],
+  queryFn: queryFn(options),
+  config
+})
+useQueryPostsControllerFindById.queryKey = '/post/{id}'
+
+export const mutationPostsControllerUpdate = (pathParams, options) => mutationFn('put', '/post/{id}', pathParams, {}, options)
+export const useMutationPostsControllerUpdate = (pathParams, config, options) => useMutation(mutationFn('put', '/post/{id}', pathParams, {}, options), config)
+
+export const mutationPostsControllerDelete = (pathParams, options) => mutationFn('delete', '/post/{id}', pathParams, {}, options)
+export const useMutationPostsControllerDelete = (pathParams, config, options) => useMutation(mutationFn('delete', '/post/{id}', pathParams, {}, options), config)
+
