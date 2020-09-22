@@ -17,16 +17,19 @@ const cli = meow(
   Usage
     $ rest-query-gen <configFile>
 
+  Options
+    --hooks, -hk  Include hooks
+
   Examples
-    $ rest-query-gen config.js
+    $ rest-query-gen config.js --hooks
 `,
   {
     flags: {
-      rainbow: {
+      hooks: {
         type: 'boolean',
-        alias: 'r'
-      }
-    }
+        alias: 'hk',
+      },
+    },
   }
 )
 
@@ -34,25 +37,33 @@ const [configFile] = cli.input
 
 const configs = require(join(process.cwd(), configFile))
 
-async function importSpecs(url) {
-  log(chalk.green(`Start import specs from "${url}"`))
+async function importSpecs({ url, json }) {
+  if (url) {
+    log(chalk.green(`Start import specs from "${url}"`))
 
-  try {
-    const req = await ky(url)
-    const data = await req.json()
+    try {
+      const req = await ky(url, { timeout: false })
+      const data = await req.json()
 
-    return data
-  } catch (err) {
-    throw new Error(`Fail to import specs from "${url}"`)
+      return data
+    } catch (err) {
+      throw new Error(`Fail to import specs from "${url}"`)
+    }
   }
+
+  if (json) {
+    return json
+  }
+
+  throw new Error(`Fail to import specs from "${url || json}"`)
 }
 
 Promise.all(
-  configs.apis.map(async config => {
+  configs.apis.map(async (config) => {
     log(chalk.green(`Start ${config.name}`))
 
-    if (!config.url) {
-      throw new Error(`"url" is required`)
+    if (!config.input || (!config.input.url && !config.input.json)) {
+      throw new Error(`"input.url" or "input.json" is required`)
     }
 
     if (!config.output) {
@@ -67,9 +78,9 @@ Promise.all(
       throw new Error(`"output.file" is required`)
     }
 
-    const specs = await importSpecs(config.url)
+    const specs = await importSpecs(config.input)
 
-    const code = await generator({ specs, config })
+    const { code, types } = await generator({ specs, config })
 
     const path = join(process.cwd(), config.output.path)
 
@@ -78,12 +89,13 @@ Promise.all(
     }
 
     writeFileSync(join(path, `${config.output.file}.js`), code)
+    writeFileSync(join(path, `${config.output.file}.d.ts`), types)
   })
 )
   .then(() => {
     log(chalk.green('Finish!'))
   })
-  .catch(err => {
+  .catch((err) => {
     log(chalk.red(err.message))
     process.exit(1)
   })

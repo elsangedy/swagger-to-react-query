@@ -1,15 +1,14 @@
 const chalk = require('chalk')
 const swagger2openapi = require('swagger2openapi')
 
-const log = console.log
+const { pascalCase, camelCase } = require('./utils')
+const generatorApi = require('./generatorApi')
+const generatorHook = require('./generatorHook')
+const generatorApiTypes = require('./generatorApiTypes')
+const generatorHookTypes = require('./generatorHookTypes')
+const { generatorGlobalTypes, generatorTypes } = require('./generatorTypes')
 
-const pascalCase = str =>
-  str
-    .split(/(?=[A-Z])/)
-    .join('_')
-    .match(/[a-z]+/gi)
-    .map(s => s.charAt(0).toUpperCase() + s.substr(1).toLowerCase())
-    .join('')
+const log = console.log
 
 function convertToOpenApiSchema(data) {
   return new Promise((resolve, reject) => {
@@ -27,137 +26,245 @@ function convertToOpenApiSchema(data) {
   })
 }
 
-function generateHook({ operation, verb, route, operationIds = [], parameters = [] }) {
-  if (!operation.operationId) {
-    throw new Error(`"operationId" is required`)
-  }
-
-  if (operationIds.includes(operation.operationId)) {
-    throw new Error(`operationId "${operation.operationId}" is duplicated!`)
-  }
-
-  operationIds.push(operation.operationId)
-
-  route = route.replace(/\{/g, '${').slice(1)
-  const operationName = pascalCase(operation.operationId)
-  const operationType = verb === 'get' ? 'Query' : 'Mutation'
-  const isOperationQuery = operationType === 'Query'
-
-  const allParams = [...parameters, ...(operation.parameters || [])]
-  const pathParams = allParams.filter(param => param.in === 'path').map(param => param.name)
-  const queryParams = allParams.filter(param => param.in === 'query').map(param => param.name)
-  const hasPathParams = pathParams.length > 0
-  const hasQueryParams = queryParams.length > 0
-  const hasQueryParamsOrPathParams = hasPathParams || hasQueryParams
-
-  // DEBUG
-  // console.log({
-  //   route,
-  //   operationName,
-  //   operationType,
-  //   pathParams,
-  //   queryParams,
-  // })
-
-  let output = ''
-
-  // generate method
-  const methodName = `${operationType.toLowerCase()}${operationName}`
-
-  output += `export const ${methodName} = (${
-    hasPathParams ? `{ ${pathParams.join(', ')}, ...options }` : 'options'
-  }) => api.${verb}(\`${route}\`, options).json()
-`
-
-  // generate hook
-  const hookName = `use${operationType}${operationName}`
-
-  // query hook
-  if (isOperationQuery) {
-    output += `export const ${hookName} = (${
-      hasQueryParamsOrPathParams ? `params, ` : ''
-    }config = {}, options = {}) => useQuery({
-  queryKey: ${
-    hasPathParams ? `params && ${pathParams.map(param => `params.${param}`).join(' && ')} && ` : ''
-  }['${route}'${hasQueryParamsOrPathParams ? `, params` : ''}],
-  queryFn: (${
-    hasPathParams
-      ? `_, { ${pathParams.join(', ')}${hasQueryParams ? ', ...searchParams' : ''} }`
-      : hasQueryParams
-      ? '_, searchParams'
-      : ''
-  }) => ${methodName}(${
-      hasQueryParamsOrPathParams
-        ? `{ ${hasPathParams ? `${pathParams.join(', ')}, ` : ''}${hasQueryParams ? 'searchParams, ' : ''}...options }`
-        : 'options'
-    }),
-  config
-})
-${hookName}.queryKey = '${route}'
-
-`
-  }
-  // mutation hook
-  else {
-    output += `export const ${hookName} = (config) => useMutation(${methodName}, config)
-
-`
-  }
-
-  return output
-}
-
-async function generator({ specs, config }) {
-  log(chalk.green(`Start ${config.name} code generation`))
-
+function validateSchema(schema) {
   const operationIds = []
-
-  const schema = await convertToOpenApiSchema(specs)
-
-  let output = ''
 
   Object.entries(schema.paths).forEach(([route, verbs]) => {
     Object.entries(verbs).forEach(([verb, operation]) => {
       if (['get', 'post', 'patch', 'put', 'delete'].includes(verb)) {
-        output += generateHook({
-          operation,
-          verb,
+        if (!operation.operationId && !!operation.summary) {
+          operation.operationId = camelCase(operation.summary)
+        }
+
+        if (!operation.operationId) {
+          throw new Error(
+            `Every path must have a operationId or summary - No operationId or summary set for ${verb} ${route}`
+          )
+        }
+
+        if (operationIds.includes(operation.operationId)) {
+          throw new Error(`"${operation.operationId}" is duplicated in your schema definition!`)
+        }
+
+        operationIds.push(operation.operationId)
+      }
+    })
+  })
+}
+
+async function generator({ specs, config }) {
+  const schema = await convertToOpenApiSchema(specs)
+
+  let outputCode = ''
+  let outputTypes = generatorGlobalTypes(schema)
+
+  validateSchema(schema)
+
+  Object.entries(schema.paths).forEach(([route, verbs]) => {
+    Object.entries(verbs).forEach(([verb, operation]) => {
+      if (['get', 'post', 'patch', 'put', 'delete'].includes(verb)) {
+        const operationName = pascalCase(operation.operationId)
+        const operationType = verb === 'get' ? 'Query' : 'Mutation'
+        const isOperationQuery = operationType === 'Query'
+
+        const allParams = [...(verbs.parameters || []), ...(operation.parameters || [])]
+        const pathParamsBase = allParams.filter((param) => param.in === 'path')
+        const pathParams = pathParamsBase.map((param) => param.name)
+        const queryParamsBase = allParams.filter((param) => param.in === 'query')
+        const queryParams = queryParamsBase.map((param) => param.name)
+        const hasPathParams = pathParams.length > 0
+        const hasQueryParams = queryParams.length > 0
+        const hasQueryParamsOrPathParams = hasPathParams || hasQueryParams
+
+        const params = {
           route,
-          operationIds,
-          parameters: verbs.parameters
-        })
+          verb: verb.toLowerCase(),
+          operation,
+          operationName,
+          operationType,
+          isOperationQuery,
+          allParams,
+          pathParams,
+          queryParams,
+          pathParamsBase,
+          queryParamsBase,
+          hasPathParams,
+          hasQueryParams,
+          hasQueryParamsOrPathParams,
+        }
+
+        outputCode += generatorApi(params)
+        outputCode += generatorHook(params)
+        outputCode += `
+`
+        outputTypes += generatorTypes(params)
+        outputTypes += generatorApiTypes(params)
+        outputTypes += generatorHookTypes(params)
+        outputTypes += `
+`
       }
     })
   })
 
-  const hasQuery = Boolean(output.match(/useQuery/))
-  const hasMutation = Boolean(output.match(/useMutation/))
+  const hasQuery = Boolean(outputCode.match(/useQuery/))
+  const hasMutation = Boolean(outputCode.match(/useMutation/))
 
-  const reactQueryImports = []
+  const codeReactQueryImports = []
+  const typesReactQueryImports = []
 
   if (hasQuery) {
-    reactQueryImports.push('useQuery')
+    codeReactQueryImports.push('useQuery')
+    typesReactQueryImports.push('QueryOptions', 'QueryResult')
   }
 
   if (hasMutation) {
-    reactQueryImports.push('useMutation')
+    codeReactQueryImports.push('useMutation')
+    typesReactQueryImports.push('MutationOptions', 'MutateFunction', 'MutationResult')
   }
 
   // imports
-  output = `import ky from "ky"
-import { ${reactQueryImports.join(', ')} } from "react-query"
+  outputCode = `/* eslint-disable */
+/* tslint:disable */
+import ky from 'ky'
+import { ${codeReactQueryImports.join(', ')} } from 'react-query'
 
 let api = ky.create(${JSON.stringify(config.kyOptions || {}, null, 2)})
 
 export const getApi = () => api
 
-export const setApi = (newApi) => api = typeof newApi === 'function' ? newApi(getApi()) : newApi
+export const setApi = (newApi) => {
+  api = newApi
+}
 
-${output}`
+export const extendApi = (options) => {
+  api = getApi().extend(options)
+}
+
+const requestFn = async ({ url, method, pathParams, queryParams, ...rest }) => {
+  const urlPathParams = url.match(/{([^}]+)}/g)
+
+  if (urlPathParams) {
+    url = urlPathParams.reduce((acc, param) => acc.replace(param, pathParams[param.replace(/{|}/g, '')]), url)
+  } else {
+    queryParams = pathParams
+  }
+
+  if (url.charAt(0) === '/') {
+    url = url.replace('/', '')
+  }
+
+  const response = await api(url, {
+    method,
+    ...rest,
+    searchParams: {
+      ...(rest.searchParams || {}),
+      ...queryParams
+    }
+  })
+
+  let data
+
+  try {
+    const contentType = (response.headers.get('content-type') || '').split('; ')[0]
+
+    const responseType =
+      {
+        'application/json': 'json',
+        'application/pdf': 'blob'
+      }[contentType] || 'text'
+
+    data = await response[responseType]()
+  } catch (e) {
+    data = e.message
+  }
+
+  if (!response.ok) {
+    const error = {
+      data,
+      status: response.status,
+      message: \`Failed to fetch: \${response.status} \${response.statusText}\`
+    }
+
+    throw error
+  }
+
+  return data
+}
+
+const queryFn = (options = {}) => (url, pathParams = {}, queryParams = {}) => {
+  const controller = new AbortController()
+  const { signal } = controller
+
+  const promise = requestFn({
+    url,
+    method: 'get',
+    pathParams,
+    queryParams,
+    signal,
+    ...options
+  })
+
+  // cancel the request if React Query calls the 'promise.cancel' method
+  promise.cancel = () => {
+    controller.abort('Query was cancelled by React Query')
+  }
+
+  return promise
+}
+
+const mutationFn = (
+  method,
+  url,
+  pathParams = {},
+  queryParams = {},
+  options = {}
+) => (body = {}) => {
+  if (Array.isArray(body)) {
+    pathParams = { ...pathParams, ...(body[0] || {}) }
+    queryParams = { ...queryParams, ...(body[1] || {}) }
+    options = { ...options, ...(body[3] || {}) }
+    body = body[2]
+  }
+
+  const request = {
+    url,
+    method,
+    pathParams,
+    queryParams,
+    ...options
+  }
+
+  if (method !== 'delete') {
+    try {
+      request[body.toString() === '[object FormData]' ? 'body' : 'json'] = body
+    } catch(e) {
+    }
+  }
+
+  return requestFn(request)
+}
+
+${outputCode}`
+
+  outputTypes = `/* eslint-disable */
+/* tslint:disable */
+import ky, { Options } from 'ky'
+import { ${typesReactQueryImports.join(', ')} } from 'react-query'
+
+export const getApi: { (): typeof ky }
+
+export const setApi: { (newApi: typeof ky ): void }
+
+export const extendApi: { (options: Options ): void }
+
+${outputTypes}`
 
   log(chalk.green(`Finish ${config.name} code generation`))
 
-  return Promise.resolve(output)
+  return Promise.resolve({
+    code: outputCode,
+    types: outputTypes,
+  })
 }
 
 module.exports = generator
