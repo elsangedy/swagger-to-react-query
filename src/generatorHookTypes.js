@@ -23,7 +23,7 @@ function generatorHookTypes({
     )}${ifElse(
       hasQueryParams,
       `queryParams?: ${operationName}QueryParams, `
-    )}config?: QueryOptions<${responseTypes}>, options?: Options): QueryResult<${responseTypes}>; queryKey: string }`
+    )}config?: QueryConfig<${responseTypes}>, options?: Options): QueryResult<${responseTypes}>; queryKey: string }`
   } else {
     const requestBodyTypes = getResReqTypes([['body', operation.requestBody]])
 
@@ -39,7 +39,7 @@ function generatorHookTypes({
     )}${ifElse(
       hasQueryParams,
       `queryParams?: ${operationName}QueryParams, `
-    )}config?: MutationOptions<${responseTypes}, ${requestBodyTypes}>, options?: Options): [MutateFunction<${responseTypes}, ${requestBodyTypes} | ${requestBodyTypesOptional}>, MutationResult<${responseTypes}>] }`
+    )}config?: MutationConfig<${responseTypes}, ${requestBodyTypes}>, options?: Options): [MutateFunction<${responseTypes}, ${requestBodyTypes} | ${requestBodyTypesOptional}>, MutationResult<${responseTypes}>] }`
   }
 
   return `${output}

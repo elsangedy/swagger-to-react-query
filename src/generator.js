@@ -114,12 +114,12 @@ async function generator({ specs, config }) {
 
   if (hasQuery) {
     codeReactQueryImports.push('useQuery')
-    typesReactQueryImports.push('QueryOptions', 'QueryResult')
+    typesReactQueryImports.push('QueryConfig', 'QueryResult')
   }
 
   if (hasMutation) {
     codeReactQueryImports.push('useMutation')
-    typesReactQueryImports.push('MutationOptions', 'MutateFunction', 'MutationResult')
+    typesReactQueryImports.push('MutationConfig', 'MutateFunction', 'MutationResult')
   }
 
   // imports
