@@ -14,7 +14,7 @@ function pascalCase(str) {
   return str
     .split(/(?=[A-Z])/)
     .join('_')
-    .match(/[a-z]+/gi)
+    .match(/[a-z,0-9]+/gi)
     .map((s) => s.charAt(0).toUpperCase() + s.substr(1).toLowerCase())
     .join('')
 }
