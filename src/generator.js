@@ -165,7 +165,7 @@ const requestFn = async ({ url, method, pathParams, queryParams, ...rest }) => {
   let data
 
   try {
-    const contentType = (response.headers.get('content-type') || '').split('; ')[0]
+    const contentType = (response.headers.get('content-type') || '').split(';')[0]
 
     const responseType =
       {
