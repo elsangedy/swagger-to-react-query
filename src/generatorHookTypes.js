@@ -39,7 +39,7 @@ function generatorHookTypes({
     )}${ifElse(
       hasQueryParams,
       `queryParams?: ${operationName}QueryParams, `
-    )}config?: MutationConfig<${responseTypes}, ${requestBodyTypes}>, options?: Options): [MutateFunction<${responseTypes}, ${requestBodyTypes} | ${requestBodyTypesOptional}>, MutationResult<${responseTypes}>] }`
+    )}config?: MutationConfig<${responseTypes}, unknown, ${requestBodyTypes}>, options?: Options): [MutateFunction<${responseTypes}, unknown, ${requestBodyTypes} | ${requestBodyTypesOptional}>, MutationResult<${responseTypes}>] }`
   }
 
   return `${output}
