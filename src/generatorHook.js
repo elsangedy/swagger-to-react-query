@@ -15,16 +15,24 @@ function generatorHook({
   const hookName = `use${operationType}${operationName}`
 
   if (isOperationQuery) {
-    output += `export const ${hookName} = (${ifElse(hasPathParams, 'pathParams, ')}${ifElse(
+    output += `export const ${hookName} = (${ifElse(hasPathParams, 'pathParams = null, ')}${ifElse(
       hasQueryParams,
-      'queryParams, '
+      'queryParams = null, '
     )}config, options) => useQuery({
-  queryKey: ${ifElse(
+  queryKey: ['${route}'${ifElse(hasPathParams, ', pathParams')}${ifElse(
+      hasQueryParams,
+      ', queryParams'
+    )}].filter(Boolean),
+  queryFn: () => queryFn({ url: '${route}'${ifElse(hasPathParams, ', pathParams')}${ifElse(
+      hasQueryParams,
+      ', queryParams'
+    )}, options }),
+  enabled: ${ifElse(
     hasPathParams,
-    'pathParams && ' + pathParams.map((param) => `pathParams.${param}`).join(' && ') + ' && '
-  )}['${route}'${ifElse(hasPathParams, ', pathParams')}${ifElse(hasQueryParams, ', queryParams')}],
-  queryFn: queryFn(options),
-  config
+    '!!pathParams && ' + pathParams.map((param) => `!!pathParams.${param}`).join(' && '),
+    true
+  )}, 
+  ...config
 })
 ${hookName}.queryKey = '${route}'`
   }

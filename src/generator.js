@@ -139,8 +139,9 @@ export const setApi = (newApi) => {
 export const extendApi = (options) => {
   api = getApi().extend(options)
 }
-
 const requestFn = async ({ url, method, pathParams, queryParams, ...rest }) => {
+  queryParams = JSON.parse(JSON.stringify(queryParams))
+
   const urlPathParams = url.match(/{([^}]+)}/g)
 
   if (urlPathParams) {
@@ -191,7 +192,7 @@ const requestFn = async ({ url, method, pathParams, queryParams, ...rest }) => {
   return data
 }
 
-const queryFn = (options = {}) => (url, pathParams = {}, queryParams = {}) => {
+const queryFn = ({ url, pathParams = {}, queryParams = {}, options = {} }) => {
   const controller = new AbortController()
   const { signal } = controller
 
