@@ -146,7 +146,7 @@ const requestFn = async ({ url, method, pathParams, queryParams, ...rest }) => {
   if (urlPathParams) {
     url = urlPathParams.reduce((acc, param) => acc.replace(param, pathParams[param.replace(/{|}/g, '')]), url)
   } else {
-    queryParams = pathParams
+    queryParams = { ...queryParams, ...pathParams }
   }
 
   if (url.charAt(0) === '/') {
