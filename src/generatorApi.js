@@ -17,10 +17,10 @@ function generatorApiTypes({
     output += `export const ${methodName} = (${ifElse(hasPathParams, 'pathParams, ')}${ifElse(
       hasQueryParams,
       'queryParams, '
-    )}options) => queryFn(options)('${route}'${ifElse(hasPathParams, ', pathParams')}${ifElse(
+    )}options) => queryFn({ url: '${route}'${ifElse(hasPathParams, ', pathParams')}${ifElse(
       hasQueryParams,
       ', queryParams'
-    )})`
+    )}, options })`
   } else {
     output += `export const ${methodName} = (${ifElse(hasPathParams, 'pathParams, ')}${ifElse(
       hasQueryParams,

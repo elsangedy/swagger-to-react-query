@@ -139,14 +139,13 @@ export const setApi = (newApi) => {
 export const extendApi = (options) => {
   api = getApi().extend(options)
 }
-
 const requestFn = async ({ url, method, pathParams, queryParams, ...rest }) => {
+  queryParams = JSON.parse(JSON.stringify(queryParams))
+
   const urlPathParams = url.match(/{([^}]+)}/g)
 
   if (urlPathParams) {
     url = urlPathParams.reduce((acc, param) => acc.replace(param, pathParams[param.replace(/{|}/g, '')]), url)
-  } else {
-    queryParams = { ...queryParams, ...pathParams }
   }
 
   if (url.charAt(0) === '/') {
@@ -191,7 +190,7 @@ const requestFn = async ({ url, method, pathParams, queryParams, ...rest }) => {
   return data
 }
 
-const queryFn = (options = {}) => (url, pathParams = {}, queryParams = {}) => {
+const queryFn = ({ url, pathParams = {}, queryParams = {}, options = {} }) => {
   const controller = new AbortController()
   const { signal } = controller
 
