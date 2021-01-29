@@ -41,12 +41,12 @@ if (!configFile) {
 
 const configs = require(join(process.cwd(), configFile))
 
-async function importSpecs({ url, json }) {
+async function importSpecs({ url, headers = {}, json }) {
   if (url) {
     log(chalk.green(`Start import specs from "${url}"`))
 
     try {
-      const req = await ky(url, { timeout: false })
+      const req = await ky(url, { headers, timeout: false })
       const data = await req.json()
 
       return data

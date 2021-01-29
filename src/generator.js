@@ -177,7 +177,7 @@ const requestFn = async ({ url, method, pathParams, queryParams, ...rest }) => {
     data = e.message
   }
 
-  if (!response.ok) {
+  if (!response || !response.ok) {
     const error = {
       data,
       status: response.status,

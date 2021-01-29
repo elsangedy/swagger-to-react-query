@@ -27,11 +27,11 @@ function generatorHookTypes({
   } else {
     const requestBodyTypes = getResReqTypes([['body', operation.requestBody]])
 
-    const requestBodyTypesOptional = `[${ifElse(hasPathParams, `${operationName}PathParams`, 'void')}, ${ifElse(
+    const requestBodyTypesOptional = `[${ifElse(hasPathParams, `${operationName}PathParams`, 'void')}?, ${ifElse(
       hasQueryParams,
       `${operationName}QueryParams`,
       'void'
-    )}, ${requestBodyTypes}, Options]`
+    )}?, ${requestBodyTypes}?, Options?]`
 
     output += `export const ${hookName}: { (${ifElse(
       hasPathParams,
